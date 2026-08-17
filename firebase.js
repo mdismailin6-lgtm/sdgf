@@ -34,12 +34,12 @@ import {
 
 // Firebase Configuration
 const firebaseConfig = {
-    apiKey: "",
-    authDomain: "",
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: ""
+    apiKey: "AIzaSyAVEn9oglei25Y_m1plr5f4ZYZ82_lnVr4",
+    authDomain: "online-education-for-all.firebaseapp.com",
+    projectId: "online-education-for-all",
+    storageBucket: "online-education-for-all.firebasestorage.app",
+    messagingSenderId: "239923576788",
+    appId: "1:239923576788:web:b92ec2256ef3476a126041"
 };
 
 // Initialize Firebase
