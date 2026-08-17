@@ -128,7 +128,7 @@
     <!-- Top Announcement Bar -->
     <div id="announcement-bar" class="bg-gradient-to-r from-brand-700 via-brand-600 to-accent-600 text-white text-xs md:text-sm font-medium h-9 sm:h-10 px-3 md:px-4 flex items-center justify-between z-50 relative overflow-hidden shrink-0 shadow-sm border-b border-brand-800/40">
         <div class="flex items-center shrink-0 z-20 bg-gradient-to-r from-brand-700 via-brand-700 to-brand-700/90 pr-2.5 sm:pr-3 py-1">
-            <span class="bg-amber-400 text-slate-900 font-extrabold px-2.5 py-0.5 rounded text-[10px] sm:text-xs uppercase tracking-wide shadow-sm flex items-center gap-1">
+            <span class="bg-amber-400 text-slate-900 font-extrabold px-2.5 py-0.5 rounded text-[10px] sm:text-xs uppercase tracking-wide whitespace-nowrap shadow-sm flex items-center gap-1">
                 <i class="fa-solid fa-bullhorn text-[10px] text-slate-900"></i>
                 <span>বিশেষ নোটিশ</span>
             </span>
@@ -457,130 +457,10 @@
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { 
-            getAuth, signInAnonymously, signInWithCustomToken, createUserWithEmailAndPassword, 
-            signInWithEmailAndPassword, signOut, onAuthStateChanged,
-            GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, updateProfile
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, 
-            deleteDoc, onSnapshot, query, where, serverTimestamp, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, increment
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <!-- -------- NEW: load Firebase module first -------- -->
+    <script type="module" src="firebase.js"></script>
 
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyAVEn9oglei25Y_m1plr5f4ZYZ82_lnVr4",
-            authDomain: "online-education-for-all.firebaseapp.com",
-            projectId: "online-education-for-all",
-            storageBucket: "online-education-for-all.firebasestorage.app",
-            messagingSenderId: "239923576788",
-            appId: "1:239923576788:web:b92ec2256ef3476a126041"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        
-        let db;
-        try {
-            db = initializeFirestore(app, {
-                localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-            });
-        } catch(e) {
-            db = getFirestore(app);
-        }
-        
-        const auth = getAuth(app);
-
-        window.FB = { app, auth, db };
-        window.FBFns = {
-            collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, 
-            onSnapshot, query, where, serverTimestamp, increment,
-            createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
-            GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, updateProfile
-        };
-
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                const allowed = await verifyOrRegisterDeviceSession(user);
-                if (!allowed) return;
-
-                ListenerManager.subscribe('userProfile', onSnapshot(doc(db, 'users', user.uid), (userSnap) => {
-                    if (userSnap.exists()) {
-                        window.currentUser = userSnap.data();
-                    } else {
-                        window.currentUser = {
-                            uid: user.uid,
-                            name: user.displayName || 'ছাত্র-ছাত্রী',
-                            email: user.email,
-                            photoURL: user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-                            status: 'active',
-                            authProvider: user.providerData?.[0]?.providerId || 'password'
-                        };
-                    }
-                    updateAuthUI();
-                }));
-
-                const enq = query(collection(db, 'enrollments'), where('userId', '==', user.uid), where('status', '==', 'active'));
-                ListenerManager.subscribe('userEnrollments', onSnapshot(enq, (snap) => {
-                    let enr = [];
-                    snap.forEach(d => enr.push(d.data().courseId));
-                    window.AppState.userEnrollments = enr;
-                    window.AppState.cart = window.AppState.cart.filter(item => !enr.includes(item.id));
-                    updateCartBadge();
-                    refreshActiveViewIfRelevant();
-                }));
-
-                const ordq = query(collection(db, 'orders'), where('userId', '==', user.uid));
-                ListenerManager.subscribe('userOrders', onSnapshot(ordq, (osnap) => {
-                    let userOrds = [];
-                    osnap.forEach(d => userOrds.push({ id: d.id, ...d.data() }));
-                    window.AppState.userOrders = userOrds;
-                    refreshActiveViewIfRelevant();
-                }));
-
-                const wq = query(collection(db, 'wishlist'), where('userId', '==', user.uid));
-                ListenerManager.subscribe('userWishlist', onSnapshot(wq, (wsnap) => {
-                    let wlist = [];
-                    wsnap.forEach(d => wlist.push(d.data().courseId));
-                    window.AppState.wishlist = wlist;
-                    refreshActiveViewIfRelevant();
-                }));
-
-            } else {
-                ListenerManager.unsubscribe('userProfile');
-                ListenerManager.unsubscribe('userEnrollments');
-                ListenerManager.unsubscribe('userOrders');
-                ListenerManager.unsubscribe('userWishlist');
-                window.currentUser = null;
-                window.AppState.userEnrollments = [];
-                window.AppState.userOrders = [];
-                window.AppState.cart = [];
-                window.AppState.wishlist = [];
-                updateAuthUI();
-                updateCartBadge();
-                refreshActiveViewIfRelevant();
-            }
-        });
-
-        function refreshActiveViewIfRelevant() {
-            if (['home', 'courses', 'details', 'cart', 'my-courses', 'wishlist'].includes(window.AppState.currentView)) {
-                switchView(window.AppState.currentView, { courseId: window.AppState.selectedCourseId }, true);
-            }
-        }
-
-        async function initAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                }
-            } catch(e) {
-                console.log("Auth init info:", e);
-            }
-        }
-        initAuth();
-    </script>
-
+    <!-- -------- Main application script (unchanged except startup moved inside DOMContentLoaded) -------- -->
     <script>
         window.ListenerManager = {
             globalListeners: {},
@@ -1044,16 +924,10 @@
             document.getElementById('gcomp-phone').value = user.phoneNumber || '';
         }
 
-        // ==========================================
-        // FIXED: Google Sign-Up Profile Save Section
-        // ==========================================
         async function handleGoogleProfileCompleteSubmit(e) {
             e.preventDefault();
             const user = window.AppState.pendingGoogleUser || window.FB.auth.currentUser;
-            if (!user) { 
-                showToast('ইউজার পাওয়া যায়নি!', 'error'); 
-                return; 
-            }
+            if (!user) { showToast('ইউজার পাওয়া যায়নি!', 'error'); return; }
 
             const phone = document.getElementById('gcomp-phone').value.trim();
             const school = document.getElementById('gcomp-school').value.trim();
@@ -1066,18 +940,16 @@
             if (!terms) { showToast('শর্তাবলীতে সম্মত হতে টিক চিহ্ন দিন।', 'error'); return; }
 
             try {
-                // ⭐ 100% perfect match with your Kotlin User data class
                 const profile = {
-                    uid: user.uid || '',
+                    uid: user.uid,
                     name: user.displayName || 'ছাত্র-ছাত্রী',
-                    email: user.email || '',
-                    phone: phone || '',
+                    email: user.email,
+                    phone: phone,
+                    schoolName: school,
+                    classLevel: classLevel,
                     photoURL: user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-                    schoolName: school || '',
-                    classLevel: classLevel || '',
-                    authProvider: 'google',
                     status: 'active',
-                    isOnline: false,                // ✅ Added to match Kotlin model
+                    authProvider: 'google',
                     termsAccepted: true,
                     privacyAccepted: true,
                     termsAcceptedAt: window.FBFns.serverTimestamp(),
@@ -1100,7 +972,6 @@
                     resetAndGoHome();
                 }
             } catch (err) {
-                console.error("Firestore Google Sign-Up Error:", err);
                 showToast('প্রোফাইল সেভ ত্রুটি: ' + err.message, 'error');
             }
         }
@@ -1117,9 +988,6 @@
             }
         }
 
-        // ==========================================
-        // FIXED: Email/Password Registration Section
-        // ==========================================
         async function handleRegisterSubmit(e) {
             e.preventDefault();
             const name = document.getElementById('reg-name').value.trim();
@@ -1143,18 +1011,16 @@
                 const cred = await window.FBFns.createUserWithEmailAndPassword(window.FB.auth, email, pass);
                 const user = cred.user;
 
-                // ⭐ 100% perfect match with your Kotlin User data class
                 const profile = {
-                    uid: user.uid || '',
-                    name: name || '',
-                    email: email || '',
-                    phone: phone || '',
+                    uid: user.uid,
+                    name: name,
+                    email: email,
+                    phone: phone,
+                    schoolName: school,
+                    classLevel: classLevel,
                     photoURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-                    schoolName: school || '',
-                    classLevel: classLevel || '',
-                    authProvider: 'password',
                     status: 'active',
-                    isOnline: false,                // ✅ Added to match Kotlin model
+                    authProvider: 'password',
                     termsAccepted: true,
                     privacyAccepted: true,
                     termsAcceptedAt: window.FBFns.serverTimestamp(),
@@ -1162,7 +1028,6 @@
                     createdAt: window.FBFns.serverTimestamp(),
                     updatedAt: window.FBFns.serverTimestamp()
                 };
-                
                 await window.FBFns.setDoc(window.FBFns.doc(window.FB.db, 'users', user.uid), profile);
                 window.currentUser = profile;
                 closeAuthModal();
@@ -3033,7 +2898,7 @@
                             <div onclick="switchView('chapters-list', {courseId: '${courseId}', subjectId: '${sub.id}'})" class="bg-white rounded-2xl border border-slate-200 hover:border-brand-500 hover:shadow-xl overflow-hidden cursor-pointer transition-all duration-300 flex flex-col group">
                                 <div class="relative h-40 bg-slate-800 overflow-hidden">
                                     ${subImg ? `
-                                        <img src="${subImg}" alt="${sub.title}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'w-full h-full bg-gradient-to-tr from-brand-700 to-accent-700 flex items-center justify-center text-white/30 text-4xl font-bold\'><i class=\\'fa-solid fa-book\\'></i></div>';">
+                                        <img src="${subImg}" alt="${sub.title}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gradient-to-tr from-brand-700 to-accent-700 flex items-center justify-center text-white/30 text-4xl font-bold\\'><i class=\\'fa-solid fa-book\\'></i></div>';">
                                     ` : `
                                         <div class="w-full h-full bg-gradient-to-tr from-brand-700 to-accent-700 flex items-center justify-center text-white/30 text-4xl font-bold">
                                             <i class="fa-solid fa-book"></i>
@@ -3151,7 +3016,7 @@
                             <div onclick="switchView('chapter-lessons', {courseId: '${courseId}', subjectId: '${subjectId}', chapterId: '${ch.id}'})" class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-brand-500 transition-all duration-300 cursor-pointer flex flex-col group">
                                 <div class="relative h-40 overflow-hidden bg-slate-800">
                                     ${chapterImg ? `
-                                        <img src="${chapterImg}" alt="${ch.title}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'w-full h-full bg-gradient-to-br from-brand-700 to-accent-800 flex items-center justify-center text-white/30 text-4xl font-bold\'><i class=\\'fa-solid fa-book-open\\'></i></div>';">
+                                        <img src="${chapterImg}" alt="${ch.title}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gradient-to-br from-brand-700 to-accent-800 flex items-center justify-center text-white/30 text-4xl font-bold\\'><i class=\\'fa-solid fa-book-open\\'></i></div>';">
                                     ` : `
                                         <div class="w-full h-full bg-gradient-to-br from-brand-700 to-accent-800 flex items-center justify-center text-white/30 text-4xl font-bold">
                                             <i class="fa-solid fa-book-open"></i>
@@ -4117,6 +3982,7 @@
             }
         }
 
+        // -------- Moved Firebase-dependent startup code inside DOMContentLoaded --------
         window.addEventListener('DOMContentLoaded', () => {
             window.AppState.filterOptions = {
                 search: '',
@@ -4125,6 +3991,91 @@
             };
             switchView('home');
             setupRealtimeSubscriptions();
+
+            // Firebase auth state listener and initAuth (now safe because FB is defined)
+            if (window.FB && window.FBFns) {
+                onAuthStateChanged(window.FB.auth, async (user) => {
+                    if (user) {
+                        const allowed = await verifyOrRegisterDeviceSession(user);
+                        if (!allowed) return;
+
+                        ListenerManager.subscribe('userProfile', window.FBFns.onSnapshot(window.FBFns.doc(window.FB.db, 'users', user.uid), (userSnap) => {
+                            if (userSnap.exists()) {
+                                window.currentUser = userSnap.data();
+                            } else {
+                                window.currentUser = {
+                                    uid: user.uid,
+                                    name: user.displayName || 'ছাত্র-ছাত্রী',
+                                    email: user.email,
+                                    photoURL: user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+                                    status: 'active',
+                                    authProvider: user.providerData?.[0]?.providerId || 'password'
+                                };
+                            }
+                            updateAuthUI();
+                        }));
+
+                        const enq = window.FBFns.query(window.FBFns.collection(window.FB.db, 'enrollments'), window.FBFns.where('userId', '==', user.uid), window.FBFns.where('status', '==', 'active'));
+                        ListenerManager.subscribe('userEnrollments', window.FBFns.onSnapshot(enq, (snap) => {
+                            let enr = [];
+                            snap.forEach(d => enr.push(d.data().courseId));
+                            window.AppState.userEnrollments = enr;
+                            window.AppState.cart = window.AppState.cart.filter(item => !enr.includes(item.id));
+                            updateCartBadge();
+                            refreshActiveViewIfRelevant();
+                        }));
+
+                        const ordq = window.FBFns.query(window.FBFns.collection(window.FB.db, 'orders'), window.FBFns.where('userId', '==', user.uid));
+                        ListenerManager.subscribe('userOrders', window.FBFns.onSnapshot(ordq, (osnap) => {
+                            let userOrds = [];
+                            osnap.forEach(d => userOrds.push({ id: d.id, ...d.data() }));
+                            window.AppState.userOrders = userOrds;
+                            refreshActiveViewIfRelevant();
+                        }));
+
+                        const wq = window.FBFns.query(window.FBFns.collection(window.FB.db, 'wishlist'), window.FBFns.where('userId', '==', user.uid));
+                        ListenerManager.subscribe('userWishlist', window.FBFns.onSnapshot(wq, (wsnap) => {
+                            let wlist = [];
+                            wsnap.forEach(d => wlist.push(d.data().courseId));
+                            window.AppState.wishlist = wlist;
+                            refreshActiveViewIfRelevant();
+                        }));
+
+                    } else {
+                        ListenerManager.unsubscribe('userProfile');
+                        ListenerManager.unsubscribe('userEnrollments');
+                        ListenerManager.unsubscribe('userOrders');
+                        ListenerManager.unsubscribe('userWishlist');
+                        window.currentUser = null;
+                        window.AppState.userEnrollments = [];
+                        window.AppState.userOrders = [];
+                        window.AppState.cart = [];
+                        window.AppState.wishlist = [];
+                        updateAuthUI();
+                        updateCartBadge();
+                        refreshActiveViewIfRelevant();
+                    }
+                });
+
+                async function initAuth() {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await window.FBFns.signInWithCustomToken(window.FB.auth, __initial_auth_token);
+                        }
+                    } catch(e) {
+                        console.log("Auth init info:", e);
+                    }
+                }
+                initAuth();
+
+                function refreshActiveViewIfRelevant() {
+                    if (['home', 'courses', 'details', 'cart', 'my-courses', 'wishlist'].includes(window.AppState.currentView)) {
+                        switchView(window.AppState.currentView, { courseId: window.AppState.selectedCourseId }, true);
+                    }
+                }
+            } else {
+                console.warn("Firebase not ready; auth listeners not set.");
+            }
         });
     </script>
 </body>
